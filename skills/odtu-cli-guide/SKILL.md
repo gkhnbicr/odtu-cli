@@ -20,6 +20,11 @@ metadata:
 
 If `odtu` is not found in a non-interactive shell `PATH`, invoke `~/.local/bin/odtu`.
 
+## Strict Safety & Explicit-Approval Rules
+
+- **No upload or submit without explicit approval:** `odtu` is strictly **read-only** across ODTUClass, SAIS, and METU IMAP. Never upload files, submit assignments/quizzes, mutate course/portal state, or send emails via browser automation, `curl`, scripts, or any workaround unless the user explicitly asks you to perform that submission and confirms it first.
+- **Do not probe or use ODTU Rez (`rez.metu.edu.tr`):** Never check appointment slots, scrape, book, or cancel reservations on `rez.metu.edu.tr` (unless the user explicitly tells you to open/check it for that specific request).
+
 ## Always Use `--json`
 
 Every `odtu` command accepts the global `--json` flag (`odtu --json <cmd>` or `odtu <cmd> --json`).
@@ -30,9 +35,9 @@ In agent workflows, **always pass `--json`**:
 
 ## Authentication, Keychain & Auto-Relogin
 
-- **Session state:** Stored in `~/.odtuclass/session.json` (Moodle) and `~/.odtuclass/student-session.json` (SAIS). **No plaintext passwords are written to disk.**
-- **Password storage:** On macOS, `odtu login` saves the METU password in **macOS Keychain** (service `odtu-cli-metu`, account `<username>`). Headless/Linux environments can pass `ODTU_PASSWORD` via environment.
-- **Auto-relogin:** When either Moodle or SAIS sessions expire, commands automatically re-authenticate using Keychain/`ODTU_PASSWORD` and retry transparently. Verify anytime with `odtu status --json` (returns `loggedIn`, `keychainStored`, `reauthenticated`).
+- **Session state:** Stored in `~/.odtuclass/session.json` (Moodle) and `~/.odtuclass/student-session.json` (SAIS) with `0600` permissions.
+- **Password storage:** On `odtu login`, passwords are saved to the OS credential store when available (**macOS Keychain**, **Linux Secret Service `secret-tool`**, or **Windows DPAPI `CurrentUser`**). On headless Linux or locked keyrings without an active Secret Service session, it falls back to the `0600` session file or `ODTU_PASSWORD` env var.
+- **Auto-relogin:** When either Moodle or SAIS sessions expire, commands automatically re-authenticate using the stored credential / `ODTU_PASSWORD` and retry transparently. Verify anytime with `odtu status --json` (returns `loggedIn`, `keychainStored`, `credentialBackend`, `reauthenticated`).
 - **Interactive vs non-interactive login:** Never run bare `odtu login` programmatically (interactive TTY wizard). If the user has not logged in yet, either ask them to run `odtu login` in their terminal or pipe via stdin (`printf '%s\n' ... | odtu login -u <user> --password-stdin -y <year> -s <f|s|u>`). Never pass plaintext passwords with `-p` on the shell command line.
 
 ## Command Reference
