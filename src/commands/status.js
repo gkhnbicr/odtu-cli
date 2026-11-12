@@ -1,6 +1,6 @@
 import chalk from 'chalk';
 import { getClient } from '../client.js';
-import { hasKeychainPassword } from '../keychain.js';
+import { hasKeychainPassword, getCredentialBackend } from '../keychain.js';
 import { handleErrors, spinner, infoBox, isJsonMode, emitJson } from '../ui.js';
 
 export default function (program) {
@@ -51,6 +51,9 @@ export default function (program) {
             semesterDisplay: client.semesterDisplay,
             baseUrl: client.baseUrl,
             keychainStored: hasKeychainPassword(client.username),
+            credentialBackend: hasKeychainPassword(client.username)
+              ? getCredentialBackend()
+              : (process.env.ODTU_PASSWORD ? 'environment' : null),
             reauthenticated,
           });
           return;

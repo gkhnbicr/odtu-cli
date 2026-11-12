@@ -8,7 +8,10 @@ import * as cheerio from 'cheerio';
 import { readFileSync, writeFileSync, mkdirSync, existsSync, chmodSync, unlinkSync } from 'fs';
 import { homedir } from 'os';
 import { join } from 'path';
-import { getPassword, savePassword, isMacKeychainSupported } from './keychain.js';
+import {
+  getPassword, savePassword,
+  getCredentialBackend, isCredentialStoreSupported, isSecureStorage,
+} from './keychain.js';
 
 const SESSION_DIR = join(homedir(), '.odtuclass');
 const STUDENT_SESSION_FILE = join(SESSION_DIR, 'student-session.json');
@@ -30,16 +33,17 @@ export class StudentClient {
   saveSession({ saveToKeychain = true } = {}) {
     mkdirSync(SESSION_DIR, { recursive: true });
     let storage = 'none';
-    if (saveToKeychain && this.username && this.password && isMacKeychainSupported()) {
+    const backend = getCredentialBackend();
+    if (saveToKeychain && this.username && this.password && backend) {
       if (savePassword(this.username, this.password)) {
-        storage = 'keychain';
+        storage = backend;
       }
     }
     const data = {
       token: this.token,
       username: this.username,
     };
-    if (storage !== 'keychain' && this.password) {
+    if (!isSecureStorage(storage) && this.password) {
       data.password = this.password;
       storage = 'session-file';
     }
@@ -56,8 +60,8 @@ export class StudentClient {
       this.token = data.token;
       this.username = data.username;
       this.password = data.password || null;
-      // Migrate legacy plaintext password into macOS Keychain
-      if (data.password && this.username && isMacKeychainSupported()) {
+      // Migrate legacy plaintext password into OS credential store
+      if (data.password && this.username && isCredentialStoreSupported()) {
         if (savePassword(this.username, data.password)) {
           delete data.password;
           writeFileSync(STUDENT_SESSION_FILE, JSON.stringify(data));

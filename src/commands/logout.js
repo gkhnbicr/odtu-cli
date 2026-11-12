@@ -1,14 +1,14 @@
 import chalk from 'chalk';
 import { getClient } from '../client.js';
 import { StudentClient } from '../student-client.js';
-import { deletePassword } from '../keychain.js';
+import { deletePassword, getRetryDeleteCommand } from '../keychain.js';
 import { handleErrors, isJsonMode, emitJson } from '../ui.js';
 
 export default function (program) {
   program
     .command('logout')
     .description('Log out and clear all saved sessions')
-    .option('--keep-keychain', 'Keep stored password in macOS Keychain')
+    .option('--keep-keychain', 'Keep stored password in OS credential store')
     .action(handleErrors(async (options) => {
       const client = getClient(false);
       client.loadSession();
@@ -46,11 +46,12 @@ export default function (program) {
       console.log(chalk.yellow('Logged out (ODTUClass + Student Portal sessions cleared).'));
       for (const failure of keychainFailed) {
         console.error(
-          chalk.red(`Warning: failed to remove Keychain entry for ${failure.username}: ${failure.error}`),
+          chalk.red(`Warning: failed to remove credential for ${failure.username}: ${failure.error}`),
         );
-        console.error(
-          chalk.dim(`Retry manually: security delete-generic-password -a "${failure.username}" -s odtu-cli-metu`),
-        );
+        const retryCmd = getRetryDeleteCommand(failure.username);
+        if (retryCmd) {
+          console.error(chalk.dim(`Retry manually: ${retryCmd}`));
+        }
       }
     }));
 }

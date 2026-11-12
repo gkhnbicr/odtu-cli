@@ -7,7 +7,10 @@ import * as cheerio from 'cheerio';
 import { readFileSync, writeFileSync, mkdirSync, unlinkSync, existsSync, chmodSync } from 'fs';
 import { homedir } from 'os';
 import { join } from 'path';
-import { getPassword, hasPassword, savePassword, isMacKeychainSupported } from './keychain.js';
+import {
+  getPassword, hasPassword, savePassword,
+  getCredentialBackend, isCredentialStoreSupported, isSecureStorage,
+} from './keychain.js';
 
 const SESSION_DIR = join(homedir(), '.odtuclass');
 const SESSION_FILE = join(SESSION_DIR, 'session.json');
@@ -129,9 +132,10 @@ export class ODTUClassClient {
   saveSession({ saveToKeychain = true } = {}) {
     mkdirSync(SESSION_DIR, { recursive: true });
     let storage = 'none';
-    if (saveToKeychain && this.username && this.password && isMacKeychainSupported()) {
+    const backend = getCredentialBackend();
+    if (saveToKeychain && this.username && this.password && backend) {
       if (savePassword(this.username, this.password)) {
-        storage = 'keychain';
+        storage = backend;
       }
     }
     const data = {
@@ -142,7 +146,7 @@ export class ODTUClassClient {
       year: this.year,
       semester: this.semester,
     };
-    if (storage !== 'keychain' && this.password) {
+    if (!isSecureStorage(storage) && this.password) {
       data.password = this.password;
       storage = 'session-file';
     }
@@ -166,8 +170,8 @@ export class ODTUClassClient {
       if (this.year && this.semester) {
         this.baseUrl = makeBaseUrl(this.year, this.semester);
       }
-      // Migrate legacy plaintext password from session.json into macOS Keychain
-      if (data.password && this.username && isMacKeychainSupported()) {
+      // Migrate legacy plaintext password from session.json into OS credential store
+      if (data.password && this.username && isCredentialStoreSupported()) {
         if (savePassword(this.username, data.password)) {
           delete data.password;
           writeFileSync(SESSION_FILE, JSON.stringify(data));

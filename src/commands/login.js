@@ -3,6 +3,7 @@ import { readFileSync } from 'fs';
 import { select, input, password } from '@inquirer/prompts';
 import { ODTUClassClient, makeBaseUrl } from '../client.js';
 import { StudentClient } from '../student-client.js';
+import { isSecureStorage } from '../keychain.js';
 import {
   showBanner, spinner, successBox,
   guessSemester, semesterLabel, semesterArt, handleErrors,
@@ -12,7 +13,7 @@ import {
 export default function (program) {
   program
     .command('login')
-    .description('Log in to ODTU (stores password in macOS Keychain when available)')
+    .description('Log in to ODTU (stores password in OS credential store when available)')
     .option('-u, --username <username>', 'METU username')
     .option('-p, --password <password>', 'METU password (prefer --password-stdin or interactive)')
     .option('--password-stdin', 'Read password from stdin (avoids shell history)')
@@ -112,7 +113,7 @@ export default function (program) {
         ? client.credentialStorage
         : studentStorage;
       const envPassword = Boolean(process.env.ODTU_PASSWORD);
-      const keychainStored = credentialStorage === 'keychain';
+      const keychainStored = isSecureStorage(credentialStorage);
 
       if (isJsonMode()) {
         emitJson({
@@ -132,9 +133,14 @@ export default function (program) {
       const portalLine = studentOk
         ? `  Portal:    ${chalk.green('student.metu.edu.tr')}\n`
         : `  Portal:    ${chalk.dim('not connected')}\n`;
+      const backendLabels = {
+        keychain: 'macOS Keychain',
+        'secret-service': 'Linux Secret Service (secret-tool)',
+        'windows-dpapi': 'Windows DPAPI (CurrentUser)',
+      };
       let passwordLabel;
-      if (credentialStorage === 'keychain') {
-        passwordLabel = chalk.green('macOS Keychain');
+      if (backendLabels[credentialStorage]) {
+        passwordLabel = chalk.green(backendLabels[credentialStorage]);
       } else if (credentialStorage === 'session-file') {
         passwordLabel = chalk.dim('session file (0600)');
       } else if (envPassword) {

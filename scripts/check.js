@@ -15,3 +15,6 @@ for (const file of files) {
 }
 
 console.log(`Syntax checked ${files.length} files.`);
+
+const testRes = spawnSync(process.execPath, ['--test'], { stdio: 'inherit' });
+if (testRes.status !== 0) process.exit(testRes.status || 1);
