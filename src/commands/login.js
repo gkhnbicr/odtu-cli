@@ -3,7 +3,6 @@ import { readFileSync } from 'fs';
 import { select, input, password } from '@inquirer/prompts';
 import { ODTUClassClient, makeBaseUrl } from '../client.js';
 import { StudentClient } from '../student-client.js';
-import { hasPassword, isMacKeychainSupported } from '../keychain.js';
 import {
   showBanner, spinner, successBox,
   guessSemester, semesterLabel, semesterArt, handleErrors,
@@ -92,9 +91,11 @@ export default function (program) {
 
       const s2 = spinner('Connecting to Student Portal...').start();
       let studentOk = false;
+      let studentStorage = 'none';
       try {
         const studentClient = new StudentClient();
         await studentClient.login(username, pw);
+        studentStorage = studentClient.credentialStorage || 'none';
         s2.succeed('Student Portal connected!');
         studentOk = true;
       } catch {
@@ -107,7 +108,11 @@ export default function (program) {
         fullname = info.fullname || username;
       } catch { /* ignore */ }
 
-      const keychainStored = isMacKeychainSupported() && hasPassword(username);
+      const credentialStorage = client.credentialStorage && client.credentialStorage !== 'none'
+        ? client.credentialStorage
+        : studentStorage;
+      const envPassword = Boolean(process.env.ODTU_PASSWORD);
+      const keychainStored = credentialStorage === 'keychain';
 
       if (isJsonMode()) {
         emitJson({
@@ -118,6 +123,7 @@ export default function (program) {
           semester,
           domain,
           studentPortal: studentOk,
+          credentialStorage,
           keychainStored,
         });
         return;
@@ -126,9 +132,17 @@ export default function (program) {
       const portalLine = studentOk
         ? `  Portal:    ${chalk.green('student.metu.edu.tr')}\n`
         : `  Portal:    ${chalk.dim('not connected')}\n`;
-      const credLine = keychainStored
-        ? `  Password:  ${chalk.green('macOS Keychain')}\n`
-        : `  Password:  ${chalk.dim('session file')}\n`;
+      let passwordLabel;
+      if (credentialStorage === 'keychain') {
+        passwordLabel = chalk.green('macOS Keychain');
+      } else if (credentialStorage === 'session-file') {
+        passwordLabel = chalk.dim('session file (0600)');
+      } else if (envPassword) {
+        passwordLabel = chalk.dim('ODTU_PASSWORD env');
+      } else {
+        passwordLabel = chalk.yellow('not saved');
+      }
+      const credLine = `  Password:  ${passwordLabel}\n`;
 
       successBox(
         `${chalk.green.bold(`Welcome, ${fullname}!`)}\n\n` +

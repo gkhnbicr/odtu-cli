@@ -1,6 +1,6 @@
 import chalk from 'chalk';
 import { getClient } from '../client.js';
-import { hasPassword } from '../keychain.js';
+import { hasKeychainPassword } from '../keychain.js';
 import { handleErrors, spinner, infoBox, isJsonMode, emitJson } from '../ui.js';
 
 export default function (program) {
@@ -50,7 +50,7 @@ export default function (program) {
             semester: client.semester,
             semesterDisplay: client.semesterDisplay,
             baseUrl: client.baseUrl,
-            keychainStored: hasPassword(client.username),
+            keychainStored: hasKeychainPassword(client.username),
             reauthenticated,
           });
           return;
