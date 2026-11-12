@@ -41,22 +41,34 @@ odtu profile      # student profile + financial status
 
 | Command | Description |
 |---------|-------------|
-| `odtu login` | Interactive login wizard with arrow-key selection |
+| `odtu login` | Interactive login wizard (or `-u`/`--password-stdin`/`-y`/`-s`) |
 | `odtu courses` | List enrolled courses (`-f inprogress\|past\|future\|all`) |
 | `odtu grades` | Grades overview across all courses |
 | `odtu grades <id>` | Detailed grade breakdown for a course |
-| `odtu assignments` | All assignments across courses |
+| `odtu assignments` | All assignments across courses (with `cmid` & submission status) |
 | `odtu assignments <id>` | Assignments for a specific course |
+| `odtu assignment <cmid>` | Full assignment instructions, attachments, due date, submission status |
 | `odtu deadlines` | Upcoming events, next 14 days (`-d 30` for 30 days) |
 | `odtu deadlines <id>` | Deadlines for a specific course |
 | `odtu announcements` | Announcements across all active courses |
 | `odtu announcements <id>` | Announcements for one course (`-n 10` for more) |
-| `odtu contents <id>` | Course sections & activities as a tree |
-| `odtu download <id> [moduleId]` | Download PDFs and other attached course/assignment files (`-o <dir>`) |
+| `odtu contents <id>` | Course sections & activities (with HTML fallback when WS APIs are restricted) |
+| `odtu download <id> [moduleId]` | Download PDFs and attached course/assignment/page files (`-o <dir>`) |
 | `odtu materials <id>` | Archive files, announcements, and external links, including sites with disabled Moodle APIs |
 | `odtu forums <id>` | Forums in a course |
-| `odtu forums <id> -f <fid>` | Discussions in a specific forum |
+| `odtu forums <id> -f <fid>` | Discussions in a specific forum (`-d <did>` for posts) |
+| `odtu page <cmid>` | Read a Moodle Page activity (syllabus, exam rules, links, files) |
+| `odtu attendance [id]` | Show attendance sessions and summary |
+| `odtu fetch <urlOrPath>` | Fetch any authenticated ODTUClass URL/path (text/links or `--out <file>`) |
 | `odtu dashboard` | Full overview: active courses + upcoming events |
+
+### METU Email (`imap.metu.edu.tr:993`, Read-Only)
+
+| Command | Description |
+|---------|-------------|
+| `odtu mail` | List latest inbox messages (`-n <count>`, `--unread`, `-s <query>`, `-f <folder>`) |
+| `odtu mail <uid>` | Read full email body, links, and attachments (`--save-attachments <dir>`, `--html`) |
+| `odtu mail --folders` | List available IMAP folders |
 
 ### Student Portal (student.metu.edu.tr)
 
@@ -79,22 +91,21 @@ odtu profile      # student profile + financial status
 
 ## Features
 
-- Two data sources in one CLI: ODTUClass (Moodle) + Student Portal
-- Arrow-key year & semester selection (no typing numbers)
-- Dithering ASCII banner animation on startup
-- Auto re-login when session expires
-- Gradient-colored terminal UI with animated spinners
-- GPA visualization with progress bars
-- Curriculum completion tracking with percentage
-- Color-coded grades (green for passing, red for failing)
+- Unified CLI across **ODTUClass (Moodle)**, **Student Portal (SAIS)**, and **METU Email (read-only IMAP)**
+- Global `--json` flag across every command for clean agent/script consumption
+- Transparent HTML fallback when METU restricts Moodle Web Service endpoints (`contents`, `assignments`, `forums`, `announcements`, `download`, `materials`)
+- Password stored in **macOS Keychain** (`odtu-cli-metu`, or `ODTU_PASSWORD` env var on Linux/headless) — **zero plaintext passwords on disk**
+- Automatic background re-login when ODTUClass or SAIS sessions expire
+- Arrow-key year & semester selection, or non-interactive `--password-stdin`
+- Gradient-colored terminal UI, GPA progress bars, curriculum tracker, color-coded grades
 
 ## Security & Data Storage
 
-Your data is stored locally on your machine. Nothing is sent anywhere except to METU's own servers.
+Your data is stored locally on your machine. Nothing is sent anywhere except to METU's own servers (`*.metu.edu.tr`).
 
 ### What is saved
 
-Two files in `~/.odtuclass/`:
+Two session files in `~/.odtuclass/` (`0600` permissions, **no plaintext passwords**):
 
 **`session.json`** - ODTUClass (Moodle) session
 
@@ -104,7 +115,6 @@ Two files in `~/.odtuclass/`:
 | `sesskey` | Moodle CSRF token |
 | `user_id` | Your Moodle user ID |
 | `username` | Your METU username |
-| `password` | Your METU password (for auto re-login) |
 | `year` | Selected academic year |
 | `semester` | Selected semester code |
 
@@ -114,20 +124,14 @@ Two files in `~/.odtuclass/`:
 |-------|---------|
 | `token` | JWT from student.metu.edu.tr SSO |
 | `username` | Your METU username |
-| `password` | Your METU password (for token refresh) |
 
-### How it is protected
+### How credentials are protected
 
-- **File permissions `0600`** - only your OS user can read/write. No other user or process on the machine can access it.
-- **Local only** - credentials never leave your machine. They are sent only to `*.metu.edu.tr` over HTTPS.
+- **macOS Keychain (`odtu-cli-metu`):** On macOS, your METU password is stored in Keychain (never in `session.json` or command-line `argv`). Headless/Linux environments can provide `ODTU_PASSWORD` via environment variable.
+- **File permissions `0600`** on `~/.odtuclass/*.json` — only your OS user can read/write session state.
+- **Read-only IMAP:** `odtu mail` connects with `readonly=True` and `BODY.PEEK[]`, never altering `\Seen` flags.
 - **No telemetry** - zero analytics, zero tracking, zero external calls.
-- **`odtu logout` wipes everything** - deletes all session files entirely.
-
-### Why the password is stored
-
-Both Moodle sessions and Student Portal JWTs expire. Without the saved password, you'd have to run `odtu login` every time. With it, the CLI silently re-authenticates in the background.
-
-To disable: edit `~/.odtuclass/session.json` and remove the `password` field.
+- **`odtu logout` wipes everything** - deletes all session files and Keychain entry (pass `--keep-keychain` to retain Keychain).
 
 ## How It Works
 
@@ -217,12 +221,11 @@ odtu profile       # student info, registered courses, tuition debt
 
 ### Programmatic notes
 
+- Pass global `--json` on any command for structured JSON output (and JSON `{ ok: false, error, type }` on stderr on failure)
 - All commands exit `0` on success, `1` on error
-- Error output goes to stderr with prefixes: `Auth error:`, `API error:`, `Error:`
-- Session files are at `~/.odtuclass/` (JSON, readable)
-- `odtu login` requires an interactive terminal (TTY) for arrow-key prompts
-- If sessions expire and credentials are saved, API calls auto-retry after re-login
-- Course IDs are integers, visible in `odtu courses` output
+- Session files live at `~/.odtuclass/` (`0600`); passwords live in macOS Keychain (`odtu-cli-metu`) or `ODTU_PASSWORD`
+- `odtu login` accepts interactive TTY prompts or `--password-stdin` (avoid `-p` on shell history)
+- If sessions expire and Keychain/`ODTU_PASSWORD` is configured, both ODTUClass and SAIS auto re-authenticate seamlessly
 
 ### Data pipeline example
 
